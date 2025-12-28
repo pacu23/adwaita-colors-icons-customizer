@@ -17,6 +17,28 @@ print_warning() {
     echo "[~] $1"
 }
 
+# Function to find icon theme in multiple locations
+find_icon_theme() {
+    local theme_name="$1"
+    
+    # Search in multiple locations (in order of preference)
+    local search_paths=(
+        "$HOME/.icons/$theme_name"
+        "$HOME/.local/share/icons/$theme_name"
+        "/usr/share/icons/$theme_name"
+        "/usr/local/share/icons/$theme_name"
+    )
+    
+    for path in "${search_paths[@]}"; do
+        if [ -d "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
 # Function to validate hex color
 validate_hex_color() {
     local color="$1"
@@ -67,15 +89,17 @@ generate_middle_color() {
 create_morewaita_noapps() {
     print_status "=== Creating MoreWaita-noapps theme ==="
     
-    # Variables
-    SOURCE_DIR="/usr/share/icons/MoreWaita"
-    TARGET_DIR="$HOME/.icons/MoreWaita-noapps"
-    
-    # Check if source directory exists
-    if [ ! -d "$SOURCE_DIR" ]; then
-        print_error "Source directory $SOURCE_DIR does not exist."
+    # Find source directory
+    SOURCE_DIR=$(find_icon_theme "MoreWaita")
+    if [ $? -ne 0 ]; then
+        print_error "MoreWaita icon theme not found in any of the expected locations."
+        print_error "Searched in: ~/.icons, ~/.local/share/icons, /usr/share/icons, /usr/local/share/icons"
         return 1
     fi
+    
+    TARGET_DIR="$HOME/.icons/MoreWaita-noapps"
+    
+    print_status "Found MoreWaita at: $SOURCE_DIR"
     
     # Remove target directory if it exists (clean start)
     if [ -d "$TARGET_DIR" ]; then
@@ -198,16 +222,18 @@ create_adwaita_custom() {
     
     print_status "=== Creating Adwaita-custom theme ==="
     
-    # Variables
-    SOURCE_DIR="/usr/share/icons/Adwaita-teal"
-    TARGET_DIR="$HOME/.icons/Adwaita-custom"
-    
-    # Check if source directory exists
-    if [ ! -d "$SOURCE_DIR" ]; then
-        print_error "Source directory $SOURCE_DIR does not exist."
+    # Find source directory
+    SOURCE_DIR=$(find_icon_theme "Adwaita-teal")
+    if [ $? -ne 0 ]; then
+        print_error "Adwaita-teal icon theme not found in any of the expected locations."
+        print_error "Searched in: ~/.icons, ~/.local/share/icons, /usr/share/icons, /usr/local/share/icons"
         print_error "Please install the Adwaita-teal icon theme first."
         return 1
     fi
+    
+    TARGET_DIR="$HOME/.icons/Adwaita-custom"
+    
+    print_status "Found Adwaita-teal at: $SOURCE_DIR"
     
     # Get user input for new colors
     echo ""
