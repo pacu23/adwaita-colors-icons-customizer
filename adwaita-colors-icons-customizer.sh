@@ -55,31 +55,42 @@ validate_hex_color() {
     fi
 }
 
-# Function to generate middle color between two hex colors
-generate_middle_color() {
-    local color1="$1"
-    local color2="$2"
+# Function to generate darker color by applying same darkening ratio
+generate_darker_color() {
+    local light_color="$1"
+    local dark_color="$2"
     
     # Remove # if present
-    color1="${color1#\#}"
-    color2="${color2#\#}"
+    light_color="${light_color#\#}"
+    dark_color="${dark_color#\#}"
     
     # Convert hex to decimal for each component
-    local r1=$((16#${color1:0:2}))
-    local g1=$((16#${color1:2:2}))
-    local b1=$((16#${color1:4:2}))
+    local r_light=$((16#${light_color:0:2}))
+    local g_light=$((16#${light_color:2:2}))
+    local b_light=$((16#${light_color:4:2}))
     
-    local r2=$((16#${color2:0:2}))
-    local g2=$((16#${color2:2:2}))
-    local b2=$((16#${color2:4:2}))
+    local r_dark=$((16#${dark_color:0:2}))
+    local g_dark=$((16#${dark_color:2:2}))
+    local b_dark=$((16#${dark_color:4:2}))
     
-    # Calculate middle values (average)
-    local r_mid=$(( (r1 + r2) / 2 ))
-    local g_mid=$(( (g1 + g2) / 2 ))
-    local b_mid=$(( (b1 + b2) / 2 ))
+    # Calculate darkening ratio for each channel
+    # Ratio = dark / light (as decimal)
+    local r_ratio=$(echo "scale=3; $r_dark / $r_light" | bc)
+    local g_ratio=$(echo "scale=3; $g_dark / $g_light" | bc)
+    local b_ratio=$(echo "scale=3; $b_dark / $b_light" | bc)
+    
+    # Apply the same ratio to dark color to get darker color
+    local r_darker=$(echo "$r_dark * $r_ratio" | bc | awk '{printf "%.0f", $1}')
+    local g_darker=$(echo "$g_dark * $g_ratio" | bc | awk '{printf "%.0f", $1}')
+    local b_darker=$(echo "$b_dark * $b_ratio" | bc | awk '{printf "%.0f", $1}')
+    
+    # Clamp values to 0-255
+    r_darker=$(( r_darker < 0 ? 0 : (r_darker > 255 ? 255 : r_darker) ))
+    g_darker=$(( g_darker < 0 ? 0 : (g_darker > 255 ? 255 : g_darker) ))
+    b_darker=$(( b_darker < 0 ? 0 : (b_darker > 255 ? 255 : b_darker) ))
     
     # Convert back to hex with leading zeros
-    printf "#%02x%02x%02x\n" $r_mid $g_mid $b_mid
+    printf "#%02x%02x%02x\n" $r_darker $g_darker $b_darker
 }
 
 # ============================================
@@ -237,63 +248,40 @@ create_adwaita_custom() {
     
     # Get user input for new colors
     echo ""
-    print_status "Enter new colors for the Adwaita-custom theme"
+    print_status "Enter colors for the Adwaita-custom theme"
+    echo ""
+    echo "Note:"
+    echo "- Light color should be very light (like the bottom color in Adwaita's folders)"
+    echo "  for good contrast with the dark color"
+    echo "- Dark (accent) color could be your system accent color or any dark color"
+    echo ""
     
-    # Prompt for new light color FIRST (reversed order)
+    # Prompt for light color
     while true; do
-        read -p "Enter new light color (hex, e.g., #FF8888 for light red): " NEW_LIGHT_COLOR
+        read -p "Enter light color (hex, e.g., #e8f6f3 for very light teal): " NEW_LIGHT_COLOR
         NEW_LIGHT_COLOR=$(validate_hex_color "$NEW_LIGHT_COLOR")
         if [ $? -eq 0 ]; then
             break
         else
-            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., FF8888 or #FF8888)."
+            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., e8f6f3 or #e8f6f3)."
         fi
     done
     
-    # Prompt for new dark color
+    # Prompt for dark (accent) color
     while true; do
-        read -p "Enter new dark color (hex, e.g., #FF0000 for red): " NEW_DARK_COLOR
+        read -p "Enter dark (accent) color (hex, e.g., #16a085 for teal): " NEW_DARK_COLOR
         NEW_DARK_COLOR=$(validate_hex_color "$NEW_DARK_COLOR")
         if [ $? -eq 0 ]; then
             break
         else
-            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., FF0000 or #FF0000)."
+            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., 16a085 or #16a085)."
         fi
     done
     
-    # Ask about middle color
-    echo ""
-    echo "Middle color options:"
-    echo "1) Auto-generate middle color (average of light and dark colors)"
-    echo "2) Specify custom middle color"
-    
-    while true; do
-        read -p "Enter your choice (1 or 2): " middle_choice
-        
-        case "$middle_choice" in
-            1)
-                NEW_MIDDLE_COLOR=$(generate_middle_color "$NEW_DARK_COLOR" "$NEW_LIGHT_COLOR")
-                print_status "Auto-generated middle color: $NEW_MIDDLE_COLOR"
-                break
-                ;;
-            2)
-                while true; do
-                    read -p "Enter custom middle color (hex): " NEW_MIDDLE_COLOR
-                    NEW_MIDDLE_COLOR=$(validate_hex_color "$NEW_MIDDLE_COLOR")
-                    if [ $? -eq 0 ]; then
-                        break
-                    else
-                        print_error "Invalid hex color. Please enter a valid 6-digit hex color."
-                    fi
-                done
-                print_status "Using custom middle color: $NEW_MIDDLE_COLOR"
-                break
-                ;;
-            *)
-                print_error "Invalid choice. Please enter 1 or 2."
-                ;;
-        esac
-    done
+    # Generate darker color using the same darkening ratio
+    print_status "Generating darker color based on the darkening ratio between light and dark colors..."
+    DARKER_COLOR=$(generate_darker_color "$NEW_LIGHT_COLOR" "$NEW_DARK_COLOR")
+    print_status "Generated darker color: $DARKER_COLOR"
     
     # Remove target directory if it exists (clean start)
     if [ -d "$TARGET_DIR" ]; then
@@ -341,16 +329,18 @@ create_adwaita_custom() {
         while IFS= read -r file; do
             if [[ -f "$file" ]]; then
                 # Use sed to replace colors
-                # Dark colors
+                # Dark colors (#129eb0) -> user's dark (accent) color
                 sed -i "s/#129eb0/$NEW_DARK_COLOR/gi" "$file"
-                sed -i "s/#007184/$NEW_DARK_COLOR/gi" "$file"
                 
-                # Middle colors (generated)
-                sed -i "s/#2190a4/$NEW_MIDDLE_COLOR/gi" "$file"
-                sed -i "s/#108094/$NEW_MIDDLE_COLOR/gi" "$file"
-                sed -i "s/#1d8094/$NEW_MIDDLE_COLOR/gi" "$file"
+                # Middle colors (#2190a4, #108094, #1d8094) -> user's dark (accent) color
+                sed -i "s/#2190a4/$NEW_DARK_COLOR/gi" "$file"
+                sed -i "s/#108094/$NEW_DARK_COLOR/gi" "$file"
+                sed -i "s/#1d8094/$NEW_DARK_COLOR/gi" "$file"
                 
-                # Light colors
+                # Darker colors (#007184) -> generated darker color
+                sed -i "s/#007184/$DARKER_COLOR/gi" "$file"
+                
+                # Light colors -> user's light color
                 sed -i "s/#9edae6/$NEW_LIGHT_COLOR/gi" "$file"
                 sed -i "s/#40c1d9/$NEW_LIGHT_COLOR/gi" "$file"
                 sed -i "s/#7bdff4/$NEW_LIGHT_COLOR/gi" "$file"
@@ -375,25 +365,25 @@ create_adwaita_custom() {
         print_status "Applying special fixes to Nautilus icon..."
         
         # Replace the specific colors found in the SVG
-        # 1. #08382e -> dark color
-        sed -i "s/#08382e/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
+        # 1. #08382e -> generated darker color
+        sed -i "s/#08382e/$DARKER_COLOR/gi" "$NAUTILUS_FILE"
         
-        # 2. #0f6c59 -> middle color  
-        sed -i "s/#0f6c59/$NEW_MIDDLE_COLOR/gi" "$NAUTILUS_FILE"
+        # 2. #0f6c59 -> user's dark (accent) color
+        sed -i "s/#0f6c59/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
         
-        # 3. #1c7a8c -> dark color with 0.5 opacity (changed from 0.7 to 0.5)
-        sed -i "s/#1c7a8c/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
+        # 3. #1c7a8c -> generated darker color with 0.5 opacity (changed from 0.7 to 0.5)
+        sed -i "s/#1c7a8c/$DARKER_COLOR/gi" "$NAUTILUS_FILE"
         
         # Change the opacity to 0.5 instead of the original 0.69749063
         sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.5/gi" "$NAUTILUS_FILE"
         
         # Also target any other variations
-        sed -i "s/fill:#1c7a8c/fill:$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
+        sed -i "s/fill:#1c7a8c/fill:$DARKER_COLOR/gi" "$NAUTILUS_FILE"
         
         print_status "Nautilus icon colors replaced:"
-        echo "  #08382e -> $NEW_DARK_COLOR"
-        echo "  #0f6c59 -> $NEW_MIDDLE_COLOR"
-        echo "  #1c7a8c -> $NEW_DARK_COLOR (with 0.5 opacity)"
+        echo "  #08382e -> $DARKER_COLOR"
+        echo "  #0f6c59 -> $NEW_DARK_COLOR"
+        echo "  #1c7a8c -> $DARKER_COLOR (with 0.5 opacity)"
     else
         print_warning "Nautilus icon not found at $NAUTILUS_FILE"
     fi
