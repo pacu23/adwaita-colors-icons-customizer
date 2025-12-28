@@ -340,9 +340,11 @@ create_adwaita_custom() {
                 # Darker colors (#007184) -> generated darker color
                 sed -i "s/#007184/$DARKER_COLOR/gi" "$file"
                 
+                # #40c1d9 -> user's dark (accent) color (FIXED)
+                sed -i "s/#40c1d9/$NEW_DARK_COLOR/gi" "$file"
+                
                 # Light colors -> user's light color
                 sed -i "s/#9edae6/$NEW_LIGHT_COLOR/gi" "$file"
-                sed -i "s/#40c1d9/$NEW_LIGHT_COLOR/gi" "$file"
                 sed -i "s/#7bdff4/$NEW_LIGHT_COLOR/gi" "$file"
                 sed -i "s/#3da7bc/$NEW_LIGHT_COLOR/gi" "$file"
                 
