@@ -1,7 +1,7 @@
 # adwaita-colors-icons-customizer
 AI-generated script to customize the colors of the Adwaita Colors icon pack.
 
-Required: MoreWaita and Adwaita Colors (at /usr/share, but if you have them elsewhere you can edit the path at around line 70: # Variables).
+Required: MoreWaita and Adwaita Colors installed.
 
 Prompts you for a light and a dark color hex, optionally for a middle color. Make sure the contrast is good.
 
