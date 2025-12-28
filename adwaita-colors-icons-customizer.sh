@@ -358,9 +358,6 @@ create_adwaita_custom() {
         # 3. #1c7a8c -> dark color with 0.5 opacity (changed from 0.7 to 0.5)
         sed -i "s/#1c7a8c/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
         
-        # Change the opacity to 0.5 instead of the original 0.69749063
-        sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.5/gi" "$NAUTILUS_FILE"
-        
         # Also target any other variations
         sed -i "s/fill:#1c7a8c/fill:$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
         
