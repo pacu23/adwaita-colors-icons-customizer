@@ -5,6 +5,4 @@ Required: MoreWaita and Adwaita Colors (at /usr/share, but if you have them else
 
 Prompts you for a light and a dark color hex, optionally for a middle color.
 
-Option to include or exclude the MoreWaita app icons.
-
-Had to exclude MoreWaita's scalable app icons because they caused issues.
+Option to include or exclude the MoreWaita app icons. If excluded, had to also exclude MoreWaita's scalable app icons because they caused issues.
