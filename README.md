@@ -1,7 +1,7 @@
 # adwaita-colors-icons-customizer
 AI-generated script to customize the colors of the Adwaita Colors icon pack.
 
-Required: MoreWaita and Adwaita Colors installed.
+Required: bc (for calculating the "darker" color, MoreWaita and Adwaita Colors installed and ~/.icons to exist.
 
 Creates custom themes in ~/.icons, recoloring SVGs. Prompts you for a light and a dark color hex. Make sure the contrast is good. Dark color could be your system's accent, light should be very light, as in Adwaita's folders.
 
