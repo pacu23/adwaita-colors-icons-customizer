@@ -168,11 +168,11 @@ create_adwaita_custom() {
         
         # Update inherits based on user choice
         if [ "$use_morewaita_apps" = "yes" ]; then
-            # User wants MoreWaita app icons
-            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
-            print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
+            # User wants MoreWaita app icons - keep MoreWaita, remove Adwaita-blue
+            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
+            print_status "Updated inherits to: MoreWaita,Adwaita,AdwaitaLegacy,hicolor"
         else
-            # User doesn't want MoreWaita app icons
+            # User doesn't want MoreWaita app icons - remove both MoreWaita and Adwaita-blue
             sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
             print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
         fi
@@ -283,7 +283,7 @@ main() {
         case "$include_apps" in
             yes|YES|y|Y)
                 USE_MOREWAITA_APPS="yes"
-                print_status "Will include MoreWaita in inherits"
+                print_status "Will include MoreWaita in inherits (before Adwaita)"
                 break
                 ;;
             no|NO|n|N)
