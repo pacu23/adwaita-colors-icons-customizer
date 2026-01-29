@@ -1,11 +1,11 @@
 # adwaita-colors-icons-customizer
 AI-generated script to customize the colors of the Adwaita Colors icon pack.
 
-**Required: bc (for calculating the "darker" color, MoreWaita and Adwaita Colors installed and ~/.icons to exist.**
+**Required: bc (for calculating the "darker" color, MoreWaita and Adwaita Colors installed.**
 
-Creates custom themes in ~/.icons, recoloring SVGs. Prompts you for a light and a dark color hex. Make sure the contrast is good. Dark color could be your system's accent, light should be very light, as in Adwaita's folders.
+Creates custom themes in ~/.local/share/icons, recoloring SVGs. Prompts you for a light and a dark color hex. Make sure the contrast is good. Dark color could be your system's accent, light should be very light, as in Adwaita's folders.
 
-Option to include or exclude the MoreWaita app icons. If excluded, still uses the rest of the icons from MoreWaita for extra coverage – had to also exclude the monochrome app icons since they caused issues, but it shouldn't matter unless you specifically need them. 
+Option to include or exclude the MoreWaita app icons.
 
 Theme Libadwaita/adw-gtk3/GNOME shell: https://github.com/pacu23/adwaita-accent-color-changer
 
