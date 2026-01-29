@@ -54,10 +54,10 @@ validate_hex_color() {
     fi
 }
 
-# Function to generate darker color by 25%
+# Function to generate darker color by 30%
 generate_darker_color() {
     local color="$1"
-    local darken_percent=25  # Darken by 25%
+    local darken_percent=30  # Darken by 30%
     
     # Remove # if present
     color="${color#\#}"
@@ -110,7 +110,7 @@ create_adwaita_custom() {
     
     # Prompt for dark (accent) color FIRST
     while true; do
-        read -p "Enter dark (accent) color (hex, e.g., #16a085 for teal): " NEW_DARK_COLOR
+        read -p "Enter dark (accent) color (hex, e.g., #16a085 for green teal): " NEW_DARK_COLOR
         NEW_DARK_COLOR=$(validate_hex_color "$NEW_DARK_COLOR")
         if [ $? -eq 0 ]; then
             break
