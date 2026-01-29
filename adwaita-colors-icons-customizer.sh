@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Script to create modified icon themes
-# Part 1: MoreWaita-noapps (conditional creation)
-# Part 2: Adwaita-custom (copied with color replacements)
+# Script to create custom Adwaita icon theme with user-defined colors
+# Creates theme in ~/.local/share/icons/Adwaita-custom
 
 # Function to print plain output (no colors)
 print_status() {
@@ -23,8 +22,8 @@ find_icon_theme() {
     
     # Search in multiple locations (in order of preference)
     local search_paths=(
-        "$HOME/.icons/$theme_name"
         "$HOME/.local/share/icons/$theme_name"
+        "$HOME/.icons/$theme_name"
         "/usr/share/icons/$theme_name"
         "/usr/local/share/icons/$theme_name"
     )
@@ -94,138 +93,7 @@ generate_darker_color() {
 }
 
 # ============================================
-# PART 1: Create MoreWaita-noapps theme (conditional)
-# ============================================
-
-create_morewaita_noapps() {
-    print_status "=== Creating MoreWaita-noapps theme ==="
-    
-    # Find source directory
-    SOURCE_DIR=$(find_icon_theme "MoreWaita")
-    if [ $? -ne 0 ]; then
-        print_error "MoreWaita icon theme not found in any of the expected locations."
-        print_error "Searched in: ~/.icons, ~/.local/share/icons, /usr/share/icons, /usr/local/share/icons"
-        return 1
-    fi
-    
-    TARGET_DIR="$HOME/.icons/MoreWaita-noapps"
-    
-    print_status "Found MoreWaita at: $SOURCE_DIR"
-    
-    # Remove target directory if it exists (clean start)
-    if [ -d "$TARGET_DIR" ]; then
-        print_status "Removing existing target directory: $TARGET_DIR"
-        rm -rf "$TARGET_DIR"
-    fi
-    
-    # Create target directory
-    mkdir -p "$TARGET_DIR"
-    print_status "Created target directory: $TARGET_DIR"
-    
-    # Function to create parent directory structure
-    create_parent_dirs() {
-        local target_path="$1"
-        local parent_dir
-        parent_dir=$(dirname "$target_path")
-        
-        if [ ! -d "$parent_dir" ]; then
-            mkdir -p "$parent_dir"
-        fi
-    }
-    
-    # Process all items in source directory
-    print_status "Creating symlinks for all items except scalable and symbolic directories and index.theme..."
-    
-    # Find all items in source directory, excluding scalable, symbolic and index.theme for now
-    find "$SOURCE_DIR" -mindepth 1 -maxdepth 1 \( -name "scalable" -o -name "symbolic" -o -name "index.theme" \) -prune -o -print | while read -r item; do
-        item_name=$(basename "$item")
-        target_item="$TARGET_DIR/$item_name"
-        
-        # Create parent directory if needed (for nested structures)
-        create_parent_dirs "$target_item"
-        
-        # Create symlink
-        ln -sf "$item" "$target_item"
-    done
-    
-    # Handle scalable directory specially
-    SOURCE_SCALABLE="$SOURCE_DIR/scalable"
-    TARGET_SCALABLE="$TARGET_DIR/scalable"
-    
-    if [ -d "$SOURCE_SCALABLE" ]; then
-        print_status "Creating scalable directory structure (excluding apps)..."
-        
-        # Create scalable directory
-        mkdir -p "$TARGET_SCALABLE"
-        
-        # Find all items in scalable directory except 'apps'
-        find "$SOURCE_SCALABLE" -mindepth 1 -maxdepth 1 ! -name "apps" -print | while read -r item; do
-            item_name=$(basename "$item")
-            target_item="$TARGET_SCALABLE/$item_name"
-            
-            # Create symlink for each item in scalable (except apps)
-            ln -sf "$item" "$target_item"
-        done
-        
-        print_status "Excluded apps directory from scalable"
-    else
-        print_warning "Source scalable directory not found"
-    fi
-    
-    # Handle symbolic directory specially - create directory and symlink subdirs except apps
-    SOURCE_SYMBOLIC="$SOURCE_DIR/symbolic"
-    TARGET_SYMBOLIC="$TARGET_DIR/symbolic"
-    
-    if [ -d "$SOURCE_SYMBOLIC" ]; then
-        print_status "Creating symbolic directory structure (excluding apps)..."
-        
-        # Create symbolic directory (not symlink)
-        mkdir -p "$TARGET_SYMBOLIC"
-        
-        # Find all items in symbolic directory except 'apps'
-        find "$SOURCE_SYMBOLIC" -mindepth 1 -maxdepth 1 ! -name "apps" -print | while read -r item; do
-            item_name=$(basename "$item")
-            target_item="$TARGET_SYMBOLIC/$item_name"
-            
-            # Create symlink for each item in symbolic (except apps)
-            ln -sf "$item" "$target_item"
-        done
-        
-        print_status "Excluded apps directory from symbolic"
-    else
-        print_warning "Source symbolic directory not found"
-    fi
-    
-    # Handle index.theme - copy and modify
-    INDEX_SOURCE="$SOURCE_DIR/index.theme"
-    INDEX_TARGET="$TARGET_DIR/index.theme"
-    
-    if [ -f "$INDEX_SOURCE" ]; then
-        print_status "Copying and modifying index.theme..."
-        
-        # Copy the file (not symlink)
-        cp "$INDEX_SOURCE" "$INDEX_TARGET"
-        
-        # Change Name=MoreWaita to Name=MoreWaita-noapps
-        sed -i 's/^Name=MoreWaita$/Name=MoreWaita-noapps/' "$INDEX_TARGET"
-        
-        # Comment out Inherits line (with or without trailing spaces)
-        sed -i 's/^Inherits=Adwaita,AdwaitaLegacy,hicolor$/#Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_TARGET"
-        
-        # Also handle any other possible variations (case-insensitive)
-        sed -i 's/^[Ii]nherits=.*$/#&/' "$INDEX_TARGET" 2>/dev/null || true
-        
-        print_status "Modified index.theme"
-    else
-        print_warning "index.theme not found in source directory"
-    fi
-    
-    print_status "MoreWaita-noapps theme created successfully"
-    return 0
-}
-
-# ============================================
-# PART 2: Create Adwaita-custom theme with color replacement
+# Create Adwaita-custom theme with color replacement
 # ============================================
 
 create_adwaita_custom() {
@@ -237,37 +105,26 @@ create_adwaita_custom() {
     SOURCE_DIR=$(find_icon_theme "Adwaita-teal")
     if [ $? -ne 0 ]; then
         print_error "Adwaita-teal icon theme not found in any of the expected locations."
-        print_error "Searched in: ~/.icons, ~/.local/share/icons, /usr/share/icons, /usr/local/share/icons"
+        print_error "Searched in: ~/.local/share/icons, ~/.icons, /usr/share/icons, /usr/local/share/icons"
         print_error "Please install the Adwaita-teal icon theme first."
         return 1
     fi
     
-    TARGET_DIR="$HOME/.icons/Adwaita-custom"
+    TARGET_DIR="$HOME/.local/share/icons/Adwaita-custom"
     
     print_status "Found Adwaita-teal at: $SOURCE_DIR"
     
-    # Get user input for new colors
+    # Get user input for colors (dark first, then light)
     echo ""
     print_status "Enter colors for the Adwaita-custom theme"
     echo ""
     echo "Note:"
+    echo "- Dark (accent) color could be your system accent color or any dark color"
     echo "- Light color should be very light (like the bottom color in Adwaita's folders)"
     echo "  for good contrast with the dark color"
-    echo "- Dark (accent) color could be your system accent color or any dark color"
     echo ""
     
-    # Prompt for light color
-    while true; do
-        read -p "Enter light color (hex, e.g., #e8f6f3 for very light teal): " NEW_LIGHT_COLOR
-        NEW_LIGHT_COLOR=$(validate_hex_color "$NEW_LIGHT_COLOR")
-        if [ $? -eq 0 ]; then
-            break
-        else
-            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., e8f6f3 or #e8f6f3)."
-        fi
-    done
-    
-    # Prompt for dark (accent) color
+    # Prompt for dark (accent) color FIRST
     while true; do
         read -p "Enter dark (accent) color (hex, e.g., #16a085 for teal): " NEW_DARK_COLOR
         NEW_DARK_COLOR=$(validate_hex_color "$NEW_DARK_COLOR")
@@ -275,6 +132,17 @@ create_adwaita_custom() {
             break
         else
             print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., 16a085 or #16a085)."
+        fi
+    done
+    
+    # Prompt for light color SECOND
+    while true; do
+        read -p "Enter light color (hex, e.g., #e8f6f3 for very light teal): " NEW_LIGHT_COLOR
+        NEW_LIGHT_COLOR=$(validate_hex_color "$NEW_LIGHT_COLOR")
+        if [ $? -eq 0 ]; then
+            break
+        else
+            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., e8f6f3 or #e8f6f3)."
         fi
     done
     
@@ -298,15 +166,15 @@ create_adwaita_custom() {
     if [ -f "$INDEX_FILE" ]; then
         sed -i 's/^Name=Adwaita-teal$/Name=Adwaita-custom/' "$INDEX_FILE"
         
-        # Update inherits based on user choice - keep hicolor
+        # Update inherits based on user choice
         if [ "$use_morewaita_apps" = "yes" ]; then
             # User wants MoreWaita app icons
-            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
-            print_status "Updated inherits to: MoreWaita,Adwaita,AdwaitaLegacy,hicolor"
+            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
+            print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
         else
             # User doesn't want MoreWaita app icons
-            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=MoreWaita-noapps,Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
-            print_status "Updated inherits to: MoreWaita-noapps,Adwaita,AdwaitaLegacy,hicolor"
+            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
+            print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
         fi
         
         print_status "Updated theme name in index.theme"
@@ -406,9 +274,8 @@ main() {
     
     # Ask user about MoreWaita app icons
     echo "Do you want to include MoreWaita app icons in the theme?"
-    echo "If you choose 'no', a MoreWaita-noapps theme will be created without app icons,"
-    echo "and the Adwaita-custom theme will inherit from MoreWaita-noapps."
-    echo "If you choose 'yes', the Adwaita-custom theme will inherit from the original MoreWaita."
+    echo "If you choose 'yes', the Adwaita-custom theme will inherit from MoreWaita."
+    echo "If you choose 'no', the Adwaita-custom theme will inherit only from Adwaita."
     echo ""
     
     while true; do
@@ -416,12 +283,12 @@ main() {
         case "$include_apps" in
             yes|YES|y|Y)
                 USE_MOREWAITA_APPS="yes"
-                print_status "Using original MoreWaita with app icons"
+                print_status "Will include MoreWaita in inherits"
                 break
                 ;;
             no|NO|n|N)
                 USE_MOREWAITA_APPS="no"
-                print_status "Creating MoreWaita-noapps theme without app icons"
+                print_status "Will not include MoreWaita in inherits"
                 break
                 ;;
             *)
@@ -432,20 +299,12 @@ main() {
     
     echo ""
     
-    # Create MoreWaita-noapps theme only if user said no to app icons
-    if [ "$USE_MOREWAITA_APPS" = "no" ]; then
-        create_morewaita_noapps
-        echo ""
-    else
-        print_status "Skipping MoreWaita-noapps creation"
-    fi
-    
     # Create Adwaita-custom theme
     create_adwaita_custom "$USE_MOREWAITA_APPS"
     
     echo ""
     echo "=========================================="
-    print_status "Themes have been created successfully!"
+    print_status "Theme has been created successfully!"
     echo ""
     
     # Ask if user wants to apply Adwaita-custom theme
@@ -492,6 +351,6 @@ main
 
 echo ""
 print_status "Script completed successfully!"
-echo "Themes are located in: $HOME/.icons/"
+echo "Theme is located in: $HOME/.local/share/icons/Adwaita-custom"
 echo ""
-echo "You can also use GNOME Tweaks to switch between themes."
+echo "You can use GNOME Tweaks to switch to the Adwaita-custom theme."
