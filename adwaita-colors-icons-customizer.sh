@@ -232,11 +232,11 @@ create_adwaita_custom() {
         # 2. #0f6c59 -> user's dark (accent) color
         sed -i "s/#0f6c59/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
         
-        # 3. #1c7a8c -> generated darker color with 0.5 opacity (changed from 0.7 to 0.5)
+        # 3. #1c7a8c -> generated darker color with 0.75 opacity
         sed -i "s/#1c7a8c/$DARKER_COLOR/gi" "$NAUTILUS_FILE"
         
-        # Change the opacity to 0.5 instead of the original 0.69749063
-        sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.5/gi" "$NAUTILUS_FILE"
+        # Change the opacity to 0.75 instead of the original 0.69749063
+        sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.75/gi" "$NAUTILUS_FILE"
         
         # Also target any other variations
         sed -i "s/fill:#1c7a8c/fill:$DARKER_COLOR/gi" "$NAUTILUS_FILE"
@@ -244,7 +244,7 @@ create_adwaita_custom() {
         print_status "Nautilus icon colors replaced:"
         echo "  #08382e -> $DARKER_COLOR"
         echo "  #0f6c59 -> $NEW_DARK_COLOR"
-        echo "  #1c7a8c -> $DARKER_COLOR (with 0.5 opacity)"
+        echo "  #1c7a8c -> $DARKER_COLOR (with 0.75 opacity)"
     else
         print_warning "Nautilus icon not found at $NAUTILUS_FILE"
     fi
