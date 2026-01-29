@@ -54,39 +54,23 @@ validate_hex_color() {
     fi
 }
 
-# Function to generate darker color by applying same darkening ratio
+# Function to generate darker color by 25%
 generate_darker_color() {
-    local light_color="$1"
-    local dark_color="$2"
+    local color="$1"
+    local darken_percent=25  # Darken by 25%
     
     # Remove # if present
-    light_color="${light_color#\#}"
-    dark_color="${dark_color#\#}"
+    color="${color#\#}"
     
     # Convert hex to decimal for each component
-    local r_light=$((16#${light_color:0:2}))
-    local g_light=$((16#${light_color:2:2}))
-    local b_light=$((16#${light_color:4:2}))
+    local r=$((16#${color:0:2}))
+    local g=$((16#${color:2:2}))
+    local b=$((16#${color:4:2}))
     
-    local r_dark=$((16#${dark_color:0:2}))
-    local g_dark=$((16#${dark_color:2:2}))
-    local b_dark=$((16#${dark_color:4:2}))
-    
-    # Calculate darkening ratio for each channel
-    # Ratio = dark / light (as decimal)
-    local r_ratio=$(echo "scale=3; $r_dark / $r_light" | bc)
-    local g_ratio=$(echo "scale=3; $g_dark / $g_light" | bc)
-    local b_ratio=$(echo "scale=3; $b_dark / $b_light" | bc)
-    
-    # Apply the same ratio to dark color to get darker color
-    local r_darker=$(echo "$r_dark * $r_ratio" | bc | awk '{printf "%.0f", $1}')
-    local g_darker=$(echo "$g_dark * $g_ratio" | bc | awk '{printf "%.0f", $1}')
-    local b_darker=$(echo "$b_dark * $b_ratio" | bc | awk '{printf "%.0f", $1}')
-    
-    # Clamp values to 0-255
-    r_darker=$(( r_darker < 0 ? 0 : (r_darker > 255 ? 255 : r_darker) ))
-    g_darker=$(( g_darker < 0 ? 0 : (g_darker > 255 ? 255 : g_darker) ))
-    b_darker=$(( b_darker < 0 ? 0 : (b_darker > 255 ? 255 : b_darker) ))
+    # Darken each component by 40%
+    local r_darker=$((r * (100 - darken_percent) / 100))
+    local g_darker=$((g * (100 - darken_percent) / 100))
+    local b_darker=$((b * (100 - darken_percent) / 100))
     
     # Convert back to hex with leading zeros
     printf "#%02x%02x%02x\n" $r_darker $g_darker $b_darker
@@ -137,19 +121,26 @@ create_adwaita_custom() {
     
     # Prompt for light color SECOND
     while true; do
-        read -p "Enter light color (hex, e.g., #e8f6f3 for very light teal): " NEW_LIGHT_COLOR
+        read -p "Enter light color (hex, e.g., #a8d8cf for very light teal): " NEW_LIGHT_COLOR
         NEW_LIGHT_COLOR=$(validate_hex_color "$NEW_LIGHT_COLOR")
         if [ $? -eq 0 ]; then
             break
         else
-            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., e8f6f3 or #e8f6f3)."
+            print_error "Invalid hex color. Please enter a valid 6-digit hex color (e.g., a8d8cf or #a8d8cf)."
         fi
     done
     
-    # Generate darker color using the same darkening ratio
-    print_status "Generating darker color based on the darkening ratio between light and dark colors..."
-    DARKER_COLOR=$(generate_darker_color "$NEW_LIGHT_COLOR" "$NEW_DARK_COLOR")
-    print_status "Generated darker color: $DARKER_COLOR"
+    # Generate darker color by darkening the dark color by 40%
+    print_status "Generating darker color (40% darker than $NEW_DARK_COLOR)..."
+    DARKER_COLOR=$(generate_darker_color "$NEW_DARK_COLOR")
+    
+    # Show color comparison
+    echo ""
+    print_status "Color Palette:"
+    print_status "Light color:    $NEW_LIGHT_COLOR"
+    print_status "Dark color:     $NEW_DARK_COLOR"
+    print_status "Darker color:   $DARKER_COLOR (40% darker than dark)"
+    echo ""
     
     # Remove target directory if it exists (clean start)
     if [ -d "$TARGET_DIR" ]; then
@@ -328,7 +319,7 @@ apply_theme_prompt() {
                 break
                 ;;
             2)
-                print_status "No theme applied. You can apply it later using GNOME Tweaks or:"
+                print_status "No theme applied. You can apply it later using GNOSE Tweaks or:"
                 echo "  gsettings set org.gnome.desktop.interface icon-theme 'Adwaita-custom'"
                 break
                 ;;
