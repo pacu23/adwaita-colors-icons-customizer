@@ -2,6 +2,7 @@
 
 # Script to create custom Adwaita icon theme with user-defined colors
 # Creates theme in ~/.local/share/icons/Adwaita-custom
+# Only copies SVG files that actually need recoloring; everything else is inherited.
 
 # Function to print plain output (no colors)
 print_status() {
@@ -67,7 +68,7 @@ generate_darker_color() {
     local g=$((16#${color:2:2}))
     local b=$((16#${color:4:2}))
     
-    # Darken each component by 40%
+    # Darken each component by darken_percent
     local r_darker=$((r * (100 - darken_percent) / 100))
     local g_darker=$((g * (100 - darken_percent) / 100))
     local b_darker=$((b * (100 - darken_percent) / 100))
@@ -130,8 +131,8 @@ create_adwaita_custom() {
         fi
     done
     
-    # Generate darker color by darkening the dark color by 40%
-    print_status "Generating darker color (40% darker than $NEW_DARK_COLOR)..."
+    # Generate darker color by darkening the dark color by 30%
+    print_status "Generating darker color (30% darker than $NEW_DARK_COLOR)..."
     DARKER_COLOR=$(generate_darker_color "$NEW_DARK_COLOR")
     
     # Show color comparison
@@ -139,7 +140,7 @@ create_adwaita_custom() {
     print_status "Color Palette:"
     print_status "Light color:    $NEW_LIGHT_COLOR"
     print_status "Dark color:     $NEW_DARK_COLOR"
-    print_status "Darker color:   $DARKER_COLOR (40% darker than dark)"
+    print_status "Darker color:   $DARKER_COLOR (30% darker than dark)"
     echo ""
     
     # Remove target directory if it exists (clean start)
@@ -148,105 +149,129 @@ create_adwaita_custom() {
         rm -rf "$TARGET_DIR"
     fi
     
-    # Copy entire theme (not symlink)
-    print_status "Copying Adwaita-teal theme..."
-    cp -r "$SOURCE_DIR" "$TARGET_DIR"
+    # Create target directory
+    mkdir -p "$TARGET_DIR"
     
-    # Update the theme name in index.theme
-    INDEX_FILE="$TARGET_DIR/index.theme"
-    if [ -f "$INDEX_FILE" ]; then
-        sed -i 's/^Name=Adwaita-teal$/Name=Adwaita-custom/' "$INDEX_FILE"
+    # Copy and modify index.theme
+    if [ -f "$SOURCE_DIR/index.theme" ]; then
+        cp "$SOURCE_DIR/index.theme" "$TARGET_DIR/index.theme"
+        print_status "Copied index.theme"
         
-        # Update inherits based on user choice
+        # Update theme name
+        sed -i 's/^Name=.*/Name=Adwaita-custom/' "$TARGET_DIR/index.theme"
+        
+        # Update Inherits line robustly (replace entire line)
         if [ "$use_morewaita_apps" = "yes" ]; then
-            # User wants MoreWaita app icons - keep MoreWaita, remove Adwaita-blue
-            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
+            sed -i 's/^Inherits=.*/Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor/' "$TARGET_DIR/index.theme"
             print_status "Updated inherits to: MoreWaita,Adwaita,AdwaitaLegacy,hicolor"
         else
-            # User doesn't want MoreWaita app icons - remove both MoreWaita and Adwaita-blue
-            sed -i 's/^Inherits=MoreWaita,Adwaita,Adwaita-blue,AdwaitaLegacy,hicolor$/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$INDEX_FILE"
+            sed -i 's/^Inherits=.*/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$TARGET_DIR/index.theme"
             print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
         fi
-        
-        print_status "Updated theme name in index.theme"
+    else
+        print_error "Source theme has no index.theme file!"
+        return 1
     fi
     
-    # Process SVG files - find all SVG files in scalable subdirectories
-    print_status "Processing SVG files to replace colors..."
+    # Process SVG files - only copy those that contain any of the original colors
+    print_status "Scanning for SVG files that need recoloring..."
     
-    # Find all SVG files in scalable directory and its subdirectories
-    SVG_FILES=$(find "$TARGET_DIR/scalable" -name "*.svg" -type f)
-    SVG_COUNT=$(echo "$SVG_FILES" | wc -l)
+    # Define original color patterns (from Adwaita-teal)
+    # Dark patterns -> new dark color
+    DARK_PATTERNS=(
+        "#129eb0" "#2190a4" "#108094" "#1d8094" "#40c1d9" "#0f6c59"
+    )
+    # Darker patterns -> darker color
+    DARKER_PATTERNS=(
+        "#007184" "#08382e" "#1c7a8c"
+    )
+    # Light patterns -> new light color
+    LIGHT_PATTERNS=(
+        "#9edae6" "#7bdff4" "#3da7bc"
+    )
     
-    if [ "$SVG_COUNT" -eq 0 ]; then
+    # Combine all patterns for the initial grep
+    ALL_PATTERNS=("${DARK_PATTERNS[@]}" "${DARKER_PATTERNS[@]}" "${LIGHT_PATTERNS[@]}")
+    
+    # Build grep pattern (case-insensitive)
+    GREP_PATTERN=$(printf "\\|%s" "${ALL_PATTERNS[@]}")
+    GREP_PATTERN="${GREP_PATTERN:2}"  # remove leading "\|"
+    
+    # Find all SVG files in the source's scalable directory
+    SOURCE_SCALABLE="$SOURCE_DIR/scalable"
+    if [ ! -d "$SOURCE_SCALABLE" ]; then
+        print_error "No 'scalable' directory found in source theme!"
+        return 1
+    fi
+    
+    # Use find to get all SVG files, then filter with grep
+    # This is more efficient than checking each file individually
+    mapfile -t SVG_FILES < <(find "$SOURCE_SCALABLE" -type f -name "*.svg")
+    
+    if [ ${#SVG_FILES[@]} -eq 0 ]; then
         print_warning "No SVG files found in scalable directory"
     else
-        print_status "Found $SVG_COUNT SVG files to process"
+        print_status "Found ${#SVG_FILES[@]} SVG files total. Identifying those containing original colors..."
         
-        # Process each SVG file
-        processed=0
+        # Create associative array to mark files to copy
+        declare -A FILES_TO_COPY
+        
+        # Use grep -l to list files that contain any pattern
         while IFS= read -r file; do
-            if [[ -f "$file" ]]; then
-                # Use sed to replace colors
-                # Dark colors (#129eb0) -> user's dark (accent) color
-                sed -i "s/#129eb0/$NEW_DARK_COLOR/gi" "$file"
-                
-                # Middle colors (#2190a4, #108094, #1d8094) -> user's dark (accent) color
-                sed -i "s/#2190a4/$NEW_DARK_COLOR/gi" "$file"
-                sed -i "s/#108094/$NEW_DARK_COLOR/gi" "$file"
-                sed -i "s/#1d8094/$NEW_DARK_COLOR/gi" "$file"
-                
-                # Darker colors (#007184) -> generated darker color
-                sed -i "s/#007184/$DARKER_COLOR/gi" "$file"
-                
-                # #40c1d9 -> user's dark (accent) color (FIXED)
-                sed -i "s/#40c1d9/$NEW_DARK_COLOR/gi" "$file"
-                
-                # Light colors -> user's light color
-                sed -i "s/#9edae6/$NEW_LIGHT_COLOR/gi" "$file"
-                sed -i "s/#7bdff4/$NEW_LIGHT_COLOR/gi" "$file"
-                sed -i "s/#3da7bc/$NEW_LIGHT_COLOR/gi" "$file"
-                
-                ((processed++))
-                
-                # Show progress every 50 files
-                if [ $((processed % 50)) -eq 0 ]; then
-                    echo -ne "  Processed $processed files...\r"
-                fi
+            # Get relative path from SOURCE_SCALABLE
+            rel_path="${file#$SOURCE_SCALABLE/}"
+            FILES_TO_COPY["$rel_path"]="$file"
+        done < <(grep -l -i "$GREP_PATTERN" "${SVG_FILES[@]}" 2>/dev/null)
+        
+        copy_count=${#FILES_TO_COPY[@]}
+        print_status "Found $copy_count SVG files containing original colors. Copying and recoloring..."
+        
+        if [ $copy_count -eq 0 ]; then
+            print_warning "No SVG files contain the expected colors. Check the source theme."
+            return 1
+        fi
+        
+        # Process each file to copy and recolor
+        processed=0
+        for rel_path in "${!FILES_TO_COPY[@]}"; do
+            src_file="${FILES_TO_COPY[$rel_path]}"
+            target_file="$TARGET_DIR/scalable/$rel_path"
+            
+            # Create target directory
+            mkdir -p "$(dirname "$target_file")"
+            
+            # Copy the file
+            cp "$src_file" "$target_file"
+            
+            # Apply color replacements
+            # Dark patterns -> NEW_DARK_COLOR
+            for pattern in "${DARK_PATTERNS[@]}"; do
+                sed -i "s/$pattern/$NEW_DARK_COLOR/gi" "$target_file"
+            done
+            
+            # Darker patterns -> DARKER_COLOR
+            for pattern in "${DARKER_PATTERNS[@]}"; do
+                sed -i "s/$pattern/$DARKER_COLOR/gi" "$target_file"
+            done
+            
+            # Light patterns -> NEW_LIGHT_COLOR
+            for pattern in "${LIGHT_PATTERNS[@]}"; do
+                sed -i "s/$pattern/$NEW_LIGHT_COLOR/gi" "$target_file"
+            done
+            
+            # Special handling for Nautilus icon (fill-opacity)
+            if [[ "$rel_path" == "apps/org.gnome.Nautilus.svg" ]]; then
+                sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.75/gi" "$target_file"
             fi
-        done <<< "$SVG_FILES"
+            
+            ((processed++))
+            if [ $((processed % 20)) -eq 0 ]; then
+                echo -ne "  Processed $processed files...\r"
+            fi
+        done
         
         echo ""  # Clear the progress line
-        print_status "Color replacement complete: processed $SVG_COUNT files"
-    fi
-    
-    # Special handling for Nautilus icon
-    NAUTILUS_FILE="$TARGET_DIR/scalable/apps/org.gnome.Nautilus.svg"
-    if [ -f "$NAUTILUS_FILE" ]; then
-        print_status "Applying special fixes to Nautilus icon..."
-        
-        # Replace the specific colors found in the SVG
-        # 1. #08382e -> generated darker color
-        sed -i "s/#08382e/$DARKER_COLOR/gi" "$NAUTILUS_FILE"
-        
-        # 2. #0f6c59 -> user's dark (accent) color
-        sed -i "s/#0f6c59/$NEW_DARK_COLOR/gi" "$NAUTILUS_FILE"
-        
-        # 3. #1c7a8c -> generated darker color with 0.75 opacity
-        sed -i "s/#1c7a8c/$DARKER_COLOR/gi" "$NAUTILUS_FILE"
-        
-        # Change the opacity to 0.75 instead of the original 0.69749063
-        sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.75/gi" "$NAUTILUS_FILE"
-        
-        # Also target any other variations
-        sed -i "s/fill:#1c7a8c/fill:$DARKER_COLOR/gi" "$NAUTILUS_FILE"
-        
-        print_status "Nautilus icon colors replaced:"
-        echo "  #08382e -> $DARKER_COLOR"
-        echo "  #0f6c59 -> $NEW_DARK_COLOR"
-        echo "  #1c7a8c -> $DARKER_COLOR (with 0.75 opacity)"
-    else
-        print_warning "Nautilus icon not found at $NAUTILUS_FILE"
+        print_status "Color replacement complete: processed $processed files"
     fi
     
     print_status "Adwaita-custom theme created successfully"
@@ -319,7 +344,7 @@ apply_theme_prompt() {
                 break
                 ;;
             2)
-                print_status "No theme applied. You can apply it later using GNOSE Tweaks or:"
+                print_status "No theme applied. You can apply it later using GNOME Tweaks or:"
                 echo "  gsettings set org.gnome.desktop.interface icon-theme 'Adwaita-custom'"
                 break
                 ;;
