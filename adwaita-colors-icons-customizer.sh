@@ -3,6 +3,8 @@
 # Script to create custom Adwaita icon theme with user-defined colors
 # Creates theme in ~/.local/share/icons/Adwaita-custom
 # Only copies SVG files that actually need recoloring; everything else is inherited.
+# Optionally integrates MoreWaita mimetypes by symlinking (or copying symlinks)
+# while preserving specified files from Adwaita-teal.
 
 # Function to print plain output (no colors)
 print_status() {
@@ -273,7 +275,102 @@ create_adwaita_custom() {
         echo ""  # Clear the progress line
         print_status "Color replacement complete: processed $processed files"
     fi
-    
+
+    # ----------------------------------------------------------------------
+    # MoreWaita mimetypes integration (if requested)
+    # ----------------------------------------------------------------------
+    if [ "$use_morewaita_apps" = "yes" ]; then
+        print_status "Integrating MoreWaita mimetypes..."
+
+        # Locate MoreWaita theme
+        MOREWAITA_DIR=$(find_icon_theme "MoreWaita")
+        if [ -z "$MOREWAITA_DIR" ]; then
+            print_warning "MoreWaita icon theme not found. Skipping mimetype symlinking."
+        else
+            print_status "Found MoreWaita at: $MOREWAITA_DIR"
+            MOREWAITA_MIME="$MOREWAITA_DIR/scalable/mimetypes"
+            if [ ! -d "$MOREWAITA_MIME" ]; then
+                print_warning "MoreWaita scalable/mimetypes directory not found. Skipping."
+            else
+                TARGET_MIME="$TARGET_DIR/scalable/mimetypes"
+                mkdir -p "$TARGET_MIME"
+
+                # Explicit list of files that MUST come from Adwaita-teal (not MoreWaita)
+                EXPLICIT_ADWAITA_FILES=(
+                    "oasis-web.svg"
+                    "text-html.svg"
+                    "libreoffice-web.svg"
+                    "libreoffice-oasis-web.svg"
+                    "application-vnd.google-apps.site.svg"
+                )
+
+                # Build set of mimetype files that should be taken from Adwaita-teal:
+                # - any file already copied/recolored (i.e., in FILES_TO_COPY under mimetypes/)
+                # - plus the explicit list
+                declare -A ADWAITA_MIME_FILES
+                for rel_path in "${!FILES_TO_COPY[@]}"; do
+                    if [[ "$rel_path" == mimetypes/* ]]; then
+                        base="${rel_path#mimetypes/}"
+                        ADWAITA_MIME_FILES["$base"]=1
+                    fi
+                done
+                for file in "${EXPLICIT_ADWAITA_FILES[@]}"; do
+                    ADWAITA_MIME_FILES["$file"]=1
+                done
+
+                # Source for Adwaita-teal mimetypes
+                ADWAITA_MIME_SOURCE="$SOURCE_DIR/scalable/mimetypes"
+
+                # Process each file in MoreWaita mimetypes directory
+                print_status "Symlinking/copying MoreWaita mimetypes (excluding Adwaita-teal files)..."
+                find "$MOREWAITA_MIME" -maxdepth 1 -type f -name "*.svg" -print0 | while IFS= read -r -d '' src_file; do
+                    base=$(basename "$src_file")
+                    
+                    # Skip if this file should come from Adwaita-teal
+                    if [[ -n "${ADWAITA_MIME_FILES[$base]}" ]]; then
+                        # We'll handle Adwaita-teal copies separately
+                        continue
+                    fi
+
+                    target_link="$TARGET_MIME/$base"
+
+                    # If source is a symlink, copy the resolved target
+                    if [ -L "$src_file" ]; then
+                        actual_file=$(readlink -f "$src_file")
+                        if [ -f "$actual_file" ]; then
+                            cp "$actual_file" "$target_link"
+                            print_status "  Copied resolved symlink: $base"
+                        else
+                            print_warning "  Symlink target for $base not found, skipping"
+                        fi
+                    else
+                        # Regular file: create absolute symlink
+                        ln -sf "$src_file" "$target_link"
+                        print_status "  Symlinked: $base"
+                    fi
+                done
+
+                # Ensure explicit Adwaita-teal files are present (copied if not already there)
+                print_status "Copying explicit files from Adwaita-teal mimetypes..."
+                for file in "${EXPLICIT_ADWAITA_FILES[@]}"; do
+                    src_adw="$ADWAITA_MIME_SOURCE/$file"
+                    target_adw="$TARGET_MIME/$file"
+                    if [ -f "$src_adw" ]; then
+                        if [ ! -f "$target_adw" ]; then
+                            cp "$src_adw" "$target_adw"
+                            print_status "  Copied explicit file from Adwaita-teal: $file"
+                        else
+                            # File already exists (likely recolored) – keep the recolored version
+                            print_status "  Explicit file $file already present (likely recolored)."
+                        fi
+                    else
+                        print_warning "  Explicit file $file not found in Adwaita-teal source."
+                    fi
+                done
+            fi
+        fi
+    fi
+
     print_status "Adwaita-custom theme created successfully"
     return 0
 }
