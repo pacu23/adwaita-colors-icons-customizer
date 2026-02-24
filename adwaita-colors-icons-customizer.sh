@@ -223,6 +223,11 @@ create_adwaita_custom() {
             # Get relative path from SOURCE_SCALABLE
             rel_path="${file#$SOURCE_SCALABLE/}"
             
+	# Skip GNOME Calendar icon - it should not be themed
+	if [[ "$rel_path" == "apps/org.gnome.Calendar.svg" ]]; then
+        	continue
+    	fi
+            
             # If MoreWaita is chosen, skip the two generic script/executable icons
             # They will be handled separately in the new theme
             if [ "$use_morewaita_apps" = "yes" ] && [[ "$rel_path" == "mimetypes/text-x-script.svg" || "$rel_path" == "mimetypes/application-x-executable.svg" ]]; then
