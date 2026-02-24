@@ -3,8 +3,8 @@
 # Script to create custom Adwaita icon theme with user-defined colors
 # Creates theme in ~/.local/share/icons/Adwaita-custom
 # Only copies SVG files that actually need recoloring; everything else is inherited.
-# Optionally integrates MoreWaita mimetypes by symlinking (or copying symlinks)
-# while preserving specified files from Adwaita-teal.
+# Optionally integrates MoreWaita by adjusting inheritance and creating a separate
+# theme for generic script/executable icons.
 
 # Function to print plain output (no colors)
 print_status() {
@@ -98,6 +98,7 @@ create_adwaita_custom() {
     fi
     
     TARGET_DIR="$HOME/.local/share/icons/Adwaita-custom"
+    CUSTOM_MIME_THEME_DIR="$HOME/.local/share/icons/Adwaita-custom-mimetypes"
     
     print_status "Found Adwaita-teal at: $SOURCE_DIR"
     
@@ -164,8 +165,8 @@ create_adwaita_custom() {
         
         # Update Inherits line robustly (replace entire line)
         if [ "$use_morewaita_apps" = "yes" ]; then
-            sed -i 's/^Inherits=.*/Inherits=MoreWaita,Adwaita,AdwaitaLegacy,hicolor/' "$TARGET_DIR/index.theme"
-            print_status "Updated inherits to: MoreWaita,Adwaita,AdwaitaLegacy,hicolor"
+            sed -i 's/^Inherits=.*/Inherits=MoreWaita,Adwaita-custom-mimetypes,Adwaita,AdwaitaLegacy,hicolor/' "$TARGET_DIR/index.theme"
+            print_status "Updated inherits to: MoreWaita,Adwaita-custom-mimetypes,Adwaita,AdwaitaLegacy,hicolor"
         else
             sed -i 's/^Inherits=.*/Inherits=Adwaita,AdwaitaLegacy,hicolor/' "$TARGET_DIR/index.theme"
             print_status "Updated inherits to: Adwaita,AdwaitaLegacy,hicolor"
@@ -207,7 +208,6 @@ create_adwaita_custom() {
     fi
     
     # Use find to get all SVG files, then filter with grep
-    # This is more efficient than checking each file individually
     mapfile -t SVG_FILES < <(find "$SOURCE_SCALABLE" -type f -name "*.svg")
     
     if [ ${#SVG_FILES[@]} -eq 0 ]; then
@@ -222,6 +222,13 @@ create_adwaita_custom() {
         while IFS= read -r file; do
             # Get relative path from SOURCE_SCALABLE
             rel_path="${file#$SOURCE_SCALABLE/}"
+            
+            # If MoreWaita is chosen, skip the two generic script/executable icons
+            # They will be handled separately in the new theme
+            if [ "$use_morewaita_apps" = "yes" ] && [[ "$rel_path" == "mimetypes/text-x-script.svg" || "$rel_path" == "mimetypes/application-x-executable.svg" ]]; then
+                continue
+            fi
+            
             FILES_TO_COPY["$rel_path"]="$file"
         done < <(grep -l -i "$GREP_PATTERN" "${SVG_FILES[@]}" 2>/dev/null)
         
@@ -277,98 +284,186 @@ create_adwaita_custom() {
     fi
 
     # ----------------------------------------------------------------------
-    # MoreWaita mimetypes integration (if requested)
+    # Create Adwaita-custom-mimetypes theme (if MoreWaita chosen)
     # ----------------------------------------------------------------------
     if [ "$use_morewaita_apps" = "yes" ]; then
-        print_status "Integrating MoreWaita mimetypes..."
-
-        # Locate MoreWaita theme
-        MOREWAITA_DIR=$(find_icon_theme "MoreWaita")
-        if [ -z "$MOREWAITA_DIR" ]; then
-            print_warning "MoreWaita icon theme not found. Skipping mimetype symlinking."
-        else
-            print_status "Found MoreWaita at: $MOREWAITA_DIR"
-            MOREWAITA_MIME="$MOREWAITA_DIR/scalable/mimetypes"
-            if [ ! -d "$MOREWAITA_MIME" ]; then
-                print_warning "MoreWaita scalable/mimetypes directory not found. Skipping."
-            else
-                TARGET_MIME="$TARGET_DIR/scalable/mimetypes"
-                mkdir -p "$TARGET_MIME"
-
-                # Explicit list of files that MUST come from Adwaita-teal (not MoreWaita)
-                EXPLICIT_ADWAITA_FILES=(
-                    "oasis-web.svg"
-                    "text-html.svg"
-                    "libreoffice-web.svg"
-                    "libreoffice-oasis-web.svg"
-                    "application-vnd.google-apps.site.svg"
-                )
-
-                # Build set of mimetype files that should be taken from Adwaita-teal:
-                # - any file already copied/recolored (i.e., in FILES_TO_COPY under mimetypes/)
-                # - plus the explicit list
-                declare -A ADWAITA_MIME_FILES
-                for rel_path in "${!FILES_TO_COPY[@]}"; do
-                    if [[ "$rel_path" == mimetypes/* ]]; then
-                        base="${rel_path#mimetypes/}"
-                        ADWAITA_MIME_FILES["$base"]=1
-                    fi
-                done
-                for file in "${EXPLICIT_ADWAITA_FILES[@]}"; do
-                    ADWAITA_MIME_FILES["$file"]=1
-                done
-
-                # Source for Adwaita-teal mimetypes
-                ADWAITA_MIME_SOURCE="$SOURCE_DIR/scalable/mimetypes"
-
-                # Process each file in MoreWaita mimetypes directory
-                print_status "Symlinking/copying MoreWaita mimetypes (excluding Adwaita-teal files)..."
-                find "$MOREWAITA_MIME" -maxdepth 1 -type f -name "*.svg" -print0 | while IFS= read -r -d '' src_file; do
-                    base=$(basename "$src_file")
-                    
-                    # Skip if this file should come from Adwaita-teal
-                    if [[ -n "${ADWAITA_MIME_FILES[$base]}" ]]; then
-                        # We'll handle Adwaita-teal copies separately
-                        continue
-                    fi
-
-                    target_link="$TARGET_MIME/$base"
-
-                    # If source is a symlink, copy the resolved target
-                    if [ -L "$src_file" ]; then
-                        actual_file=$(readlink -f "$src_file")
-                        if [ -f "$actual_file" ]; then
-                            cp "$actual_file" "$target_link"
-                            print_status "  Copied resolved symlink: $base"
-                        else
-                            print_warning "  Symlink target for $base not found, skipping"
-                        fi
-                    else
-                        # Regular file: create absolute symlink
-                        ln -sf "$src_file" "$target_link"
-                        print_status "  Symlinked: $base"
-                    fi
-                done
-
-                # Ensure explicit Adwaita-teal files are present (copied if not already there)
-                print_status "Copying explicit files from Adwaita-teal mimetypes..."
-                for file in "${EXPLICIT_ADWAITA_FILES[@]}"; do
-                    src_adw="$ADWAITA_MIME_SOURCE/$file"
-                    target_adw="$TARGET_MIME/$file"
-                    if [ -f "$src_adw" ]; then
-                        if [ ! -f "$target_adw" ]; then
-                            cp "$src_adw" "$target_adw"
-                            print_status "  Copied explicit file from Adwaita-teal: $file"
-                        else
-                            # File already exists (likely recolored) – keep the recolored version
-                            print_status "  Explicit file $file already present (likely recolored)."
-                        fi
-                    else
-                        print_warning "  Explicit file $file not found in Adwaita-teal source."
-                    fi
-                done
-            fi
+        print_status "Creating Adwaita-custom-mimetypes theme for generic script/executable icons..."
+        
+        # Remove existing theme directory if present
+        if [ -d "$CUSTOM_MIME_THEME_DIR" ]; then
+            rm -rf "$CUSTOM_MIME_THEME_DIR"
         fi
+        
+        # Create directory structure
+        mkdir -p "$CUSTOM_MIME_THEME_DIR/scalable/mimetypes"
+        
+        # Create index.theme
+        cat > "$CUSTOM_MIME_THEME_DIR/index.theme" << 'EOF'
+[Icon Theme]
+Name=Adwaita-custom-mimetypes
+Comment=The Only One
+Example=folder
+Hidden=true
+
+# KDE Specific Stuff
+DisplayDepth=32
+LinkOverlay=link_overlay
+LockOverlay=lock_overlay
+ZipOverlay=zip_overlay
+DesktopDefault=48
+DesktopSizes=16,22,32,48,64,72,96,128
+ToolbarDefault=22
+ToolbarSizes=16,22,32,48
+MainToolbarDefault=22
+MainToolbarSizes=16,22,32,48
+SmallDefault=16
+SmallSizes=16
+PanelDefault=32
+PanelSizes=16,22,32,48,64,72,96,128
+
+# Directory list
+Directories=scalable/devices,scalable/mimetypes,scalable/places,scalable/status,scalable/actions,scalable/apps,scalable/categories,scalable/emblems,scalable/emotes,scalable/legacy,scalable/ui,
+
+[scalable/devices]
+Context=Devices
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/mimetypes]
+Context=MimeTypes
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/places]
+Context=Places
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/status]
+Context=Status
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/actions]
+Context=Actions
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/apps]
+Context=Applications
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/categories]
+Context=Categories
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/emblems]
+Context=Emblems
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/emotes]
+Context=Emotes
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/legacy]
+Context=Legacy
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/ui]
+Context=UI
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+EOF
+        
+        # Recolor and copy the two generic icons
+        generic_icons=(
+            "mimetypes/text-x-script.svg"
+            "mimetypes/application-x-executable.svg"
+        )
+        
+        for icon_rel in "${generic_icons[@]}"; do
+            src_file="$SOURCE_DIR/scalable/$icon_rel"
+            if [ -f "$src_file" ]; then
+                target_file="$CUSTOM_MIME_THEME_DIR/scalable/$icon_rel"
+                mkdir -p "$(dirname "$target_file")"
+                cp "$src_file" "$target_file"
+                
+                # Apply color replacements (same as before)
+                for pattern in "${DARK_PATTERNS[@]}"; do
+                    sed -i "s/$pattern/$NEW_DARK_COLOR/gi" "$target_file"
+                done
+                for pattern in "${DARKER_PATTERNS[@]}"; do
+                    sed -i "s/$pattern/$DARKER_COLOR/gi" "$target_file"
+                done
+                for pattern in "${LIGHT_PATTERNS[@]}"; do
+                    sed -i "s/$pattern/$NEW_LIGHT_COLOR/gi" "$target_file"
+                done
+                
+                print_status "  Recolored and copied $icon_rel to Adwaita-custom-mimetypes"
+            else
+                print_warning "  Source file $icon_rel not found in Adwaita-teal, skipping"
+            fi
+        done
+    fi
+
+    # ----------------------------------------------------------------------
+    # Ensure explicit Adwaita-teal mimetypes are present in Adwaita-custom
+    # (only when MoreWaita chosen, to maintain current behavior)
+    # ----------------------------------------------------------------------
+    if [ "$use_morewaita_apps" = "yes" ]; then
+        print_status "Ensuring explicit Adwaita-teal mimetypes are present in Adwaita-custom..."
+        EXPLICIT_ADWAITA_FILES=(
+            "oasis-web.svg"
+            "text-html.svg"
+            "libreoffice-web.svg"
+            "libreoffice-oasis-web.svg"
+            "application-vnd.google-apps.site.svg"
+        )
+        ADWAITA_MIME_SOURCE="$SOURCE_DIR/scalable/mimetypes"
+        TARGET_MIME="$TARGET_DIR/scalable/mimetypes"
+        mkdir -p "$TARGET_MIME"
+
+        for file in "${EXPLICIT_ADWAITA_FILES[@]}"; do
+            src_adw="$ADWAITA_MIME_SOURCE/$file"
+            target_adw="$TARGET_MIME/$file"
+            if [ -f "$src_adw" ]; then
+                if [ ! -f "$target_adw" ]; then
+                    cp "$src_adw" "$target_adw"
+                    print_status "  Copied explicit file from Adwaita-teal: $file"
+                else
+                    print_status "  Explicit file $file already present."
+                fi
+            else
+                print_warning "  Explicit file $file not found in Adwaita-teal source."
+            fi
+        done
     fi
 
     print_status "Adwaita-custom theme created successfully"
@@ -387,7 +482,8 @@ main() {
     
     # Ask user about MoreWaita app icons
     echo "Do you want to include MoreWaita app icons in the theme?"
-    echo "If you choose 'yes', the Adwaita-custom theme will inherit from MoreWaita."
+    echo "If you choose 'yes', the Adwaita-custom theme will inherit from MoreWaita,"
+    echo "and a separate theme will be created for generic script/executable icons."
     echo "If you choose 'no', the Adwaita-custom theme will inherit only from Adwaita."
     echo ""
     
@@ -396,7 +492,7 @@ main() {
         case "$include_apps" in
             yes|YES|y|Y)
                 USE_MOREWAITA_APPS="yes"
-                print_status "Will include MoreWaita in inherits (before Adwaita)"
+                print_status "Will include MoreWaita in inherits (before Adwaita-custom-mimetypes)"
                 break
                 ;;
             no|NO|n|N)
@@ -465,5 +561,8 @@ main
 echo ""
 print_status "Script completed successfully!"
 echo "Theme is located in: $HOME/.local/share/icons/Adwaita-custom"
+if [ "$USE_MOREWAITA_APPS" = "yes" ]; then
+    echo "Additional theme (for generic icons): $HOME/.local/share/icons/Adwaita-custom-mimetypes"
+fi
 echo ""
 echo "You can use GNOME Tweaks to switch to the Adwaita-custom theme."
