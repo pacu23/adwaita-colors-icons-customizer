@@ -162,7 +162,7 @@ create_adwaita_custom() {
             for pattern in "${LIGHT_PATTERNS[@]}"; do sed -i "s/$pattern/$NEW_LIGHT_COLOR/gi" "$target_file"; done
 
             if [[ "$rel_path" == "apps/org.gnome.Nautilus.svg" ]]; then
-                sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.75/gi" "$target_file"
+                sed -i "s/fill-opacity:0\.69749063/fill-opacity:0.5/gi" "$target_file"
             fi
 
             ((processed++))
